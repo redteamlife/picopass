@@ -4,6 +4,7 @@
 enum SubmenuIndex {
     SubmenuIndexRead,
     SubmenuIndexSaved,
+    SubmenuIndexManualEmulate,
     SubmenuIndexLoclass,
     SubmenuIndexNRMAC,
     SubmenuIndexAcknowledgements,
@@ -24,6 +25,8 @@ void picopass_scene_start_on_enter(void* context) {
         submenu, "Read Card", SubmenuIndexRead, picopass_scene_start_submenu_callback, picopass);
     submenu_add_item(
         submenu, "Saved", SubmenuIndexSaved, picopass_scene_start_submenu_callback, picopass);
+    submenu_add_item(
+        submenu, "Manual Emulate", SubmenuIndexManualEmulate, picopass_scene_start_submenu_callback, picopass);
     submenu_add_item(
         submenu, "Loclass", SubmenuIndexLoclass, picopass_scene_start_submenu_callback, picopass);
     if(furi_hal_rtc_is_flag_set(FuriHalRtcFlagDebug)) {
@@ -70,6 +73,12 @@ bool picopass_scene_start_on_event(void* context, SceneManagerEvent event) {
             scene_manager_set_scene_state(
                 picopass->scene_manager, PicopassSceneStart, SubmenuIndexLoclass);
             scene_manager_next_scene(picopass->scene_manager, PicopassSceneLoclass);
+            consumed = true;
+        } else if(event.event == SubmenuIndexManualEmulate) {
+            scene_manager_set_scene_state(
+                picopass->scene_manager, PicopassSceneStart, SubmenuIndexManualEmulate);
+            scene_manager_next_scene(
+                picopass->scene_manager, PicopassSceneEmulateManual);
             consumed = true;
         } else if(event.event == SubmenuIndexNRMAC) {
             picopass->nr_mac_type = AutoNRMAC;
