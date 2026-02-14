@@ -1,8 +1,11 @@
 #include "../picopass_i.h"
 #include "../picopass_device.h"
 
+void picopass_scene_create_clear_format_hint(void);
+
 void picopass_scene_file_select_on_enter(void* context) {
     Picopass* picopass = context;
+    picopass_scene_create_clear_format_hint();
     // Process file_select return
     picopass_device_set_loading_callback(picopass->dev, picopass_show_loading_popup, picopass);
     if(picopass_file_select(picopass->dev)) {

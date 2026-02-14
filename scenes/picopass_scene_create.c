@@ -1,5 +1,6 @@
 #include "../picopass_i.h"
 #include "../picopass_keys.h"
+#include "../picopass_wiegand.h"
 #include <dolphin/dolphin.h>
 #include <stdlib.h>
 #include <stdio.h>
@@ -35,6 +36,21 @@ typedef enum {
 
 static PicopassCreateState create_state;
 static bool create_state_initialized = false;
+static WiegandFormat picopass_create_format_hint = WiegandFormat_None;
+static bool picopass_create_format_hint_valid = false;
+
+bool picopass_scene_create_get_format_hint(WiegandFormat* out_format) {
+    if(!picopass_create_format_hint_valid) return false;
+    if(out_format) {
+        *out_format = picopass_create_format_hint;
+    }
+    return true;
+}
+
+void picopass_scene_create_clear_format_hint(void) {
+    picopass_create_format_hint = WiegandFormat_None;
+    picopass_create_format_hint_valid = false;
+}
 
 static const uint8_t picopass_create_default_csn[PICOPASS_BLOCK_LEN] =
     {0x6D, 0xC2, 0x5B, 0x15, 0xFE, 0xFF, 0x12, 0xE0};
@@ -357,6 +373,7 @@ void picopass_scene_create_on_enter(void* context) {
 
     picopass->dev->dev_name[0] = '\0';
     furi_string_reset(picopass->dev->load_path);
+    picopass_scene_create_clear_format_hint();
 
     // Only initialize user-facing fields once; preserve FC/CN/format across returns.
     if(!create_state_initialized) {
@@ -408,6 +425,8 @@ bool picopass_scene_create_on_event(void* context, SceneManagerEvent event) {
                 picopass->scene_manager, PicopassSceneCreate, CreateMenuRun);
             if(picopass_create_build(picopass)) {
                 picopass->dev->format = PicopassDeviceSaveFormatOriginal;
+                picopass_create_format_hint = create_state.format;
+                picopass_create_format_hint_valid = true;
                 scene_manager_next_scene(picopass->scene_manager, PicopassSceneSavedMenu);
             } else {
                 picopass_scene_create_update_menu(picopass);
