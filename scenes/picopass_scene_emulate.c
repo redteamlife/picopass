@@ -1,70 +1,9 @@
 #include "../picopass_i.h"
-#include "../picopass_wiegand.h"
 #include <dolphin/dolphin.h>
 
 #define TAG "PicopassSceneEmulate"
 
-bool picopass_scene_create_get_format_hint(WiegandFormat* out_format);
-
 static WiegandFormat format = WiegandFormat_None;
-
-static uint8_t
-    picopass_scene_emulate_get_bit_by_position(const wiegand_message_t* data, uint8_t pos) {
-    if(pos >= data->Length) return 0;
-    pos = (data->Length - pos) - 1;
-    if(pos > 95) {
-        return 0;
-    } else if(pos > 63) {
-        return (data->Top >> (pos - 64)) & 1;
-    } else if(pos > 31) {
-        return (data->Mid >> (pos - 32)) & 1;
-    } else {
-        return (data->Bot >> pos) & 1;
-    }
-}
-
-static uint64_t picopass_scene_emulate_get_linear_field(
-    const wiegand_message_t* data,
-    uint8_t first_bit,
-    uint8_t length) {
-    uint64_t result = 0;
-    for(uint8_t i = 0; i < length; i++) {
-        result = (result << 1) | picopass_scene_emulate_get_bit_by_position(data, first_bit + i);
-    }
-    return result;
-}
-
-static bool picopass_scene_emulate_unpack_no_parity(
-    WiegandFormat hint,
-    const wiegand_message_t* packed,
-    wiegand_card_t* card) {
-    wiegand_message_t hinted = *packed;
-    memset(card, 0, sizeof(*card));
-
-    switch(hint) {
-    case WiegandFormat_H10301:
-        hinted.Length = 26;
-        card->CardNumber = (hinted.Bot >> 1) & 0xFFFF;
-        card->FacilityCode = (hinted.Bot >> 17) & 0xFF;
-        return true;
-    case WiegandFormat_C1k35s:
-        hinted.Length = 35;
-        card->CardNumber = (hinted.Bot >> 1) & 0x000FFFFF;
-        card->FacilityCode = ((hinted.Mid & 1) << 11) | (hinted.Bot >> 21);
-        return true;
-    case WiegandFormat_H10302:
-        hinted.Length = 37;
-        card->CardNumber = picopass_scene_emulate_get_linear_field(&hinted, 1, 35);
-        return true;
-    case WiegandFormat_H10304:
-        hinted.Length = 37;
-        card->FacilityCode = picopass_scene_emulate_get_linear_field(&hinted, 1, 16);
-        card->CardNumber = picopass_scene_emulate_get_linear_field(&hinted, 17, 19);
-        return true;
-    default:
-        return false;
-    }
-}
 
 NfcCommand picopass_scene_listener_callback(PicopassListenerEvent event, void* context) {
     UNUSED(event);
@@ -113,28 +52,17 @@ void picopass_scene_emulate_update_ui(void* context) {
 
     wiegand_message_t packed = picopass_pacs_extract_wmo(pacs);
     wiegand_card_t card;
-    bool hint_used = false;
-    WiegandFormat hint = WiegandFormat_None;
 
-    if(picopass_scene_create_get_format_hint(&hint)) {
-        hint_used = picopass_scene_emulate_unpack_no_parity(hint, &packed, &card);
-        if(hint_used) {
-            format = hint;
-        }
-    }
-
-    if(!hint_used) {
-        if(picopass_Unpack_H10301(&packed, &card)) {
-            format = WiegandFormat_H10301;
-        } else if(picopass_Unpack_C1k35s(&packed, &card)) {
-            format = WiegandFormat_C1k35s;
-        } else if(picopass_Unpack_H10302(&packed, &card)) {
-            format = WiegandFormat_H10302;
-        } else if(picopass_Unpack_H10304(&packed, &card)) {
-            format = WiegandFormat_H10304;
-        } else {
-            format = WiegandFormat_None;
-        }
+    if(picopass_Unpack_H10301(&packed, &card)) {
+        format = WiegandFormat_H10301;
+    } else if(picopass_Unpack_C1k35s(&packed, &card)) {
+        format = WiegandFormat_C1k35s;
+    } else if(picopass_Unpack_H10302(&packed, &card)) {
+        format = WiegandFormat_H10302;
+    } else if(picopass_Unpack_H10304(&packed, &card)) {
+        format = WiegandFormat_H10304;
+    } else {
+        format = WiegandFormat_None;
     }
 
     if(format == WiegandFormat_None) {
@@ -186,23 +114,10 @@ void picopass_scene_emulate_update_pacs(Picopass* picopass, int direction) {
     wiegand_message_t packed = picopass_pacs_extract_wmo(pacs);
     wiegand_card_t card;
 
-    bool unpack_ok = false;
-    if(format == WiegandFormat_H10301) {
-        unpack_ok = picopass_Unpack_H10301(&packed, &card);
-    } else if(format == WiegandFormat_C1k35s) {
-        unpack_ok = picopass_Unpack_C1k35s(&packed, &card);
-    } else if(format == WiegandFormat_H10302) {
-        unpack_ok = picopass_Unpack_H10302(&packed, &card);
-    } else if(format == WiegandFormat_H10304) {
-        unpack_ok = picopass_Unpack_H10304(&packed, &card);
-    }
-
-    if(!unpack_ok) {
-        unpack_ok = picopass_scene_emulate_unpack_no_parity(format, &packed, &card);
-    }
-
-    if(!unpack_ok) {
-        format = WiegandFormat_None;
+    if(picopass_Unpack_H10301(&packed, &card)) {
+    } else if(picopass_Unpack_C1k35s(&packed, &card)) {
+    } else if(picopass_Unpack_H10302(&packed, &card)) {
+    } else if(picopass_Unpack_H10304(&packed, &card)) {
     }
 
     if(format != WiegandFormat_None) {

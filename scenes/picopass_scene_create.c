@@ -36,21 +36,12 @@ typedef enum {
 
 static PicopassCreateState create_state;
 static bool create_state_initialized = false;
-static WiegandFormat picopass_create_format_hint = WiegandFormat_None;
-static bool picopass_create_format_hint_valid = false;
 
-bool picopass_scene_create_get_format_hint(WiegandFormat* out_format) {
-    if(!picopass_create_format_hint_valid) return false;
-    if(out_format) {
-        *out_format = picopass_create_format_hint;
-    }
-    return true;
-}
-
-void picopass_scene_create_clear_format_hint(void) {
-    picopass_create_format_hint = WiegandFormat_None;
-    picopass_create_format_hint_valid = false;
-}
+// Currently supports iclass legacy (standard keys) H10301 and C1k35s wiegand formats only.
+// These formats have unique bit lengths (26 and 35 respectively) which allows
+// reliable format detection during emulation without additional metadata.
+// Support for H10302 and H10304 (both 37-bit) can be added in a future PR
+// by introducing a format hint after credential generation which is checked during emulation to resolve ambiguity.
 
 static const uint8_t picopass_create_default_csn[PICOPASS_BLOCK_LEN] =
     {0x6D, 0xC2, 0x5B, 0x15, 0xFE, 0xFF, 0x12, 0xE0};
@@ -61,8 +52,6 @@ static uint32_t picopass_create_max_facility_code(WiegandFormat format) {
         return 0xFF;
     case WiegandFormat_C1k35s:
         return 0x7FF;
-    case WiegandFormat_H10304:
-        return 0xFFFF;
     default:
         return 0;
     }
@@ -74,10 +63,6 @@ static uint64_t picopass_create_max_card_number(WiegandFormat format) {
         return 0xFFFF;
     case WiegandFormat_C1k35s:
         return 0xFFFFF;
-    case WiegandFormat_H10302:
-        return (1ULL << 35) - 1;
-    case WiegandFormat_H10304:
-        return 0x7FFFF;
     default:
         return 0xFFFFFFFFULL;
     }
@@ -173,10 +158,6 @@ static bool picopass_create_build(Picopass* picopass) {
     // Apply credential profile defaults based on selected type.
     picopass_create_apply_cred_type_defaults(picopass);
 
-    if(create_state.format == WiegandFormat_H10302) {
-        create_state.facility_code = 0;
-    }
-
     wiegand_card_t card = {
         .FacilityCode = create_state.facility_code,
         .CardNumber = create_state.card_number,
@@ -191,12 +172,6 @@ static bool picopass_create_build(Picopass* picopass) {
         break;
     case WiegandFormat_C1k35s:
         packed_ok = picopass_Pack_C1k35s(&card, &packed);
-        break;
-    case WiegandFormat_H10302:
-        packed_ok = picopass_Pack_H10302(&card, &packed);
-        break;
-    case WiegandFormat_H10304:
-        packed_ok = picopass_Pack_H10304(&card, &packed);
         break;
     default:
         break;
@@ -251,12 +226,8 @@ static void picopass_scene_create_update_menu(Picopass* picopass) {
     submenu_add_item(
         submenu, label, CreateMenuFormat, picopass_scene_create_submenu_callback, picopass);
 
-    if(create_state.format == WiegandFormat_H10302) {
-        snprintf(label, sizeof(label), "Facility Code: (n/a)");
-    } else {
-        snprintf(
-            label, sizeof(label), "Facility Code: %lu", (unsigned long)create_state.facility_code);
-    }
+    snprintf(
+        label, sizeof(label), "Facility Code: %lu", (unsigned long)create_state.facility_code);
     submenu_add_item(
         submenu, label, CreateMenuFacility, picopass_scene_create_submenu_callback, picopass);
 
@@ -305,9 +276,13 @@ static void picopass_scene_create_start_input(
 }
 
 static void picopass_scene_create_cycle_format(void) {
-    create_state.format = (create_state.format + 1) >= WiegandFormat_Count ?
-                              WiegandFormat_H10301 :
-                              create_state.format + 1;
+    // Cycle between supported formats only (H10301 and C1k35s)
+    if(create_state.format == WiegandFormat_H10301) {
+        create_state.format = WiegandFormat_C1k35s;
+    } else {
+        create_state.format = WiegandFormat_H10301;
+    }
+
     uint32_t fc_max = picopass_create_max_facility_code(create_state.format);
     if(fc_max == 0) {
         create_state.facility_code = 0;
@@ -350,7 +325,6 @@ void picopass_scene_create_on_enter(void* context) {
 
     picopass->dev->dev_name[0] = '\0';
     furi_string_reset(picopass->dev->load_path);
-    picopass_scene_create_clear_format_hint();
 
     // Only initialize user-facing fields once; preserve FC/CN/format across returns.
     if(!create_state_initialized) {
@@ -410,8 +384,6 @@ bool picopass_scene_create_on_event(void* context, SceneManagerEvent event) {
                 picopass->scene_manager, PicopassSceneCreate, CreateMenuRun);
             if(picopass_create_build(picopass)) {
                 picopass->dev->format = PicopassDeviceSaveFormatOriginal;
-                picopass_create_format_hint = create_state.format;
-                picopass_create_format_hint_valid = true;
                 scene_manager_next_scene(picopass->scene_manager, PicopassSceneSavedMenu);
             } else {
                 picopass_scene_create_update_menu(picopass);

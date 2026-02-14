@@ -2,8 +2,6 @@
 #include <dolphin/dolphin.h>
 #include "../picopass_keys.h"
 
-void picopass_scene_create_clear_format_hint(void);
-
 enum {
     PicopassSceneReadCardDictStandard,
     PicopassSceneReadCardDictElite,
@@ -75,8 +73,6 @@ NfcCommand picopass_read_card_worker_callback(PicopassPollerEvent event, void* c
 void picopass_scene_read_card_on_enter(void* context) {
     Picopass* picopass = context;
     dolphin_deed(DolphinDeedNfcRead);
-
-    picopass_scene_create_clear_format_hint();
 
     picopass->last_error_notify_ticks = 0;
 
