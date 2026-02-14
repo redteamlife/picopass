@@ -8,7 +8,8 @@ bool picopass_scene_create_get_format_hint(WiegandFormat* out_format);
 
 static WiegandFormat format = WiegandFormat_None;
 
-static uint8_t picopass_scene_emulate_get_bit_by_position(const wiegand_message_t* data, uint8_t pos) {
+static uint8_t
+    picopass_scene_emulate_get_bit_by_position(const wiegand_message_t* data, uint8_t pos) {
     if(pos >= data->Length) return 0;
     pos = (data->Length - pos) - 1;
     if(pos > 95) {
@@ -144,10 +145,12 @@ void picopass_scene_emulate_update_ui(void* context) {
         FuriString* desc = furi_string_alloc();
 
         furi_string_printf(desc, "FC:%lu", card.FacilityCode);
-        widget_add_string_element(widget, 92, 35, AlignCenter, AlignTop, FontSecondary, furi_string_get_cstr(desc));
+        widget_add_string_element(
+            widget, 92, 35, AlignCenter, AlignTop, FontSecondary, furi_string_get_cstr(desc));
 
         furi_string_printf(desc, "CN:%llu", card.CardNumber);
-        widget_add_string_element(widget, 92, 50, AlignCenter, AlignBottom, FontSecondary, furi_string_get_cstr(desc));
+        widget_add_string_element(
+            widget, 92, 50, AlignCenter, AlignBottom, FontSecondary, furi_string_get_cstr(desc));
         furi_string_free(desc);
 
         widget_add_button_element(

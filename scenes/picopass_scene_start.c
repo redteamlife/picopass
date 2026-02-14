@@ -77,8 +77,7 @@ bool picopass_scene_start_on_event(void* context, SceneManagerEvent event) {
         } else if(event.event == SubmenuIndexCreate) {
             scene_manager_set_scene_state(
                 picopass->scene_manager, PicopassSceneStart, SubmenuIndexCreate);
-            scene_manager_next_scene(
-                picopass->scene_manager, PicopassSceneCreate);
+            scene_manager_next_scene(picopass->scene_manager, PicopassSceneCreate);
             consumed = true;
         } else if(event.event == SubmenuIndexNRMAC) {
             picopass->nr_mac_type = AutoNRMAC;

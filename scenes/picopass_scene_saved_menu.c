@@ -48,7 +48,11 @@ void picopass_scene_saved_menu_on_enter(void* context) {
 
     if(!is_saved) {
         submenu_add_item(
-            submenu, "Save", SubmenuIndexSave, picopass_scene_saved_menu_submenu_callback, picopass);
+            submenu,
+            "Save",
+            SubmenuIndexSave,
+            picopass_scene_saved_menu_submenu_callback,
+            picopass);
     }
 
     if(secured && has_sio) {

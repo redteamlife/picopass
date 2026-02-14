@@ -119,14 +119,14 @@ static void picopass_create_seed_legacy(PicopassDeviceData* dev_data) {
     picopass_device_data_clear(dev_data);
     dev_data->auth = PicopassDeviceAuthMethodKey;
 
-    static const uint8_t default_config[PICOPASS_BLOCK_LEN] =
-        {0x12, 0xFF, 0xFF, 0xFF, 0x7F, 0x1F, 0xFF, (PICOPASS_FUSE_CRYPT10 | 0x24)};
-    static const uint8_t default_epurse[PICOPASS_BLOCK_LEN] =
-        {0xFF, 0xFF, 0xFF, 0xFF, 0x05, 0xFE, 0xFF, 0xFF};
-    static const uint8_t default_aia[PICOPASS_BLOCK_LEN] =
-        {0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF};
-    static const uint8_t default_pacs_cfg[PICOPASS_BLOCK_LEN] =
-        {0x03, 0x03, 0x03, 0x03, 0x00, 0x03, 0xE0, 0x17};
+    static const uint8_t default_config[PICOPASS_BLOCK_LEN] = {
+        0x12, 0xFF, 0xFF, 0xFF, 0x7F, 0x1F, 0xFF, (PICOPASS_FUSE_CRYPT10 | 0x24)};
+    static const uint8_t default_epurse[PICOPASS_BLOCK_LEN] = {
+        0xFF, 0xFF, 0xFF, 0xFF, 0x05, 0xFE, 0xFF, 0xFF};
+    static const uint8_t default_aia[PICOPASS_BLOCK_LEN] = {
+        0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF};
+    static const uint8_t default_pacs_cfg[PICOPASS_BLOCK_LEN] = {
+        0x03, 0x03, 0x03, 0x03, 0x00, 0x03, 0xE0, 0x17};
 
     memcpy(
         dev_data->card_data[PICOPASS_CSN_BLOCK_INDEX].data,
@@ -135,9 +135,7 @@ static void picopass_create_seed_legacy(PicopassDeviceData* dev_data) {
     dev_data->card_data[PICOPASS_CSN_BLOCK_INDEX].valid = true;
 
     memcpy(
-        dev_data->card_data[PICOPASS_CONFIG_BLOCK_INDEX].data,
-        default_config,
-        PICOPASS_BLOCK_LEN);
+        dev_data->card_data[PICOPASS_CONFIG_BLOCK_INDEX].data, default_config, PICOPASS_BLOCK_LEN);
     dev_data->card_data[PICOPASS_CONFIG_BLOCK_INDEX].valid = true;
 
     memcpy(
@@ -150,7 +148,9 @@ static void picopass_create_seed_legacy(PicopassDeviceData* dev_data) {
     dev_data->card_data[PICOPASS_SECURE_KC_BLOCK_INDEX].valid = true;
 
     memcpy(
-        dev_data->card_data[PICOPASS_SECURE_AIA_BLOCK_INDEX].data, default_aia, PICOPASS_BLOCK_LEN);
+        dev_data->card_data[PICOPASS_SECURE_AIA_BLOCK_INDEX].data,
+        default_aia,
+        PICOPASS_BLOCK_LEN);
     dev_data->card_data[PICOPASS_SECURE_AIA_BLOCK_INDEX].valid = true;
 
     memcpy(
@@ -244,55 +244,32 @@ static void picopass_scene_create_update_menu(Picopass* picopass) {
         "Cred Type: %s",
         picopass_create_cred_type_name(create_state.cred_type));
     submenu_add_item(
-        submenu,
-        label,
-        CreateMenuCredentialType,
-        picopass_scene_create_submenu_callback,
-        picopass);
+        submenu, label, CreateMenuCredentialType, picopass_scene_create_submenu_callback, picopass);
 
     snprintf(
-        label,
-        sizeof(label),
-        "Format: %s",
-        picopass_wiegand_format_name(create_state.format));
+        label, sizeof(label), "Format: %s", picopass_wiegand_format_name(create_state.format));
     submenu_add_item(
-        submenu,
-        label,
-        CreateMenuFormat,
-        picopass_scene_create_submenu_callback,
-        picopass);
+        submenu, label, CreateMenuFormat, picopass_scene_create_submenu_callback, picopass);
 
     if(create_state.format == WiegandFormat_H10302) {
         snprintf(label, sizeof(label), "Facility Code: (n/a)");
     } else {
-        snprintf(label, sizeof(label), "Facility Code: %lu", (unsigned long)create_state.facility_code);
+        snprintf(
+            label, sizeof(label), "Facility Code: %lu", (unsigned long)create_state.facility_code);
     }
     submenu_add_item(
-        submenu,
-        label,
-        CreateMenuFacility,
-        picopass_scene_create_submenu_callback,
-        picopass);
+        submenu, label, CreateMenuFacility, picopass_scene_create_submenu_callback, picopass);
 
-    snprintf(label, sizeof(label), "Card Number: %llu", (unsigned long long)create_state.card_number);
+    snprintf(
+        label, sizeof(label), "Card Number: %llu", (unsigned long long)create_state.card_number);
     submenu_add_item(
-        submenu,
-        label,
-        CreateMenuCard,
-        picopass_scene_create_submenu_callback,
-        picopass);
+        submenu, label, CreateMenuCard, picopass_scene_create_submenu_callback, picopass);
 
     submenu_add_item(
-        submenu,
-        "Run",
-        CreateMenuRun,
-        picopass_scene_create_submenu_callback,
-        picopass);
+        submenu, "Run", CreateMenuRun, picopass_scene_create_submenu_callback, picopass);
 
     submenu_set_selected_item(
-        submenu,
-        scene_manager_get_scene_state(
-            picopass->scene_manager, PicopassSceneCreate));
+        submenu, scene_manager_get_scene_state(picopass->scene_manager, PicopassSceneCreate));
 }
 
 static void picopass_scene_create_text_input_callback(void* context) {
@@ -328,9 +305,9 @@ static void picopass_scene_create_start_input(
 }
 
 static void picopass_scene_create_cycle_format(void) {
-    create_state.format =
-        (create_state.format + 1) >= WiegandFormat_Count ? WiegandFormat_H10301 :
-                                                           create_state.format + 1;
+    create_state.format = (create_state.format + 1) >= WiegandFormat_Count ?
+                              WiegandFormat_H10301 :
+                              create_state.format + 1;
     uint32_t fc_max = picopass_create_max_facility_code(create_state.format);
     if(fc_max == 0) {
         create_state.facility_code = 0;
@@ -404,13 +381,21 @@ bool picopass_scene_create_on_event(void* context, SceneManagerEvent event) {
             scene_manager_set_scene_state(
                 picopass->scene_manager, PicopassSceneCreate, CreateMenuFacility);
             picopass_scene_create_start_input(
-                picopass, PicopassCreateFieldFacility, "Facility Code (dec)", create_state.facility_code, true);
+                picopass,
+                PicopassCreateFieldFacility,
+                "Facility Code (dec)",
+                create_state.facility_code,
+                true);
             consumed = true;
         } else if(event.event == CreateMenuCard) {
             scene_manager_set_scene_state(
                 picopass->scene_manager, PicopassSceneCreate, CreateMenuCard);
             picopass_scene_create_start_input(
-                picopass, PicopassCreateFieldCard, "Card Number (dec)", create_state.card_number, true);
+                picopass,
+                PicopassCreateFieldCard,
+                "Card Number (dec)",
+                create_state.card_number,
+                true);
             consumed = true;
         } else if(event.event == CreateMenuCredentialType) {
             scene_manager_set_scene_state(
