@@ -10,7 +10,6 @@ typedef enum {
     PicopassCreateFieldNone = 0,
     PicopassCreateFieldFacility,
     PicopassCreateFieldCard,
-    PicopassCreateFieldPinLength,
 } PicopassCreateField;
 
 typedef struct {
@@ -18,14 +17,6 @@ typedef struct {
     PicopassCreateField pending_field;
     uint32_t facility_code;
     uint64_t card_number;
-    uint8_t pin_length;
-    uint8_t action;
-    PicopassEncryption encryption;
-    bool legacy;
-    bool se_enabled;
-    bool sio;
-    uint8_t biometrics;
-    uint8_t csn[PICOPASS_BLOCK_LEN];
     uint8_t cred_type;
 } PicopassCreateState;
 
@@ -34,29 +25,21 @@ enum CreateMenuIndex {
     CreateMenuFacility,
     CreateMenuCard,
     CreateMenuCredentialType,
-    CreateMenuAdvanced,
-    CreateMenuAction,
     CreateMenuRun,
 };
 
 typedef enum {
     CreateCredTypeIclassLegacyStandard = 0,
-    // Future: CreateCredTypeIclassLegacyNoEnc,
-    // Future: CreateCredTypeIclassLegacyElite,
     CreateCredTypeCount,
 } CreateCredentialType;
-
-typedef enum {
-    CreateActionEmulate = 0,
-    CreateActionWrite,
-    CreateActionSave,
-    CreateActionCount,
-} CreateAction;
 
 static PicopassCreateState create_state;
 static bool create_state_initialized = false;
 
-static uint32_t picopass_create_max_facility(WiegandFormat format) {
+static const uint8_t picopass_create_default_csn[PICOPASS_BLOCK_LEN] =
+    {0x6D, 0xC2, 0x5B, 0x15, 0xFE, 0xFF, 0x12, 0xE0};
+
+static uint32_t picopass_create_max_facility_code(WiegandFormat format) {
     switch(format) {
     case WiegandFormat_H10301:
         return 0xFF;
@@ -69,7 +52,7 @@ static uint32_t picopass_create_max_facility(WiegandFormat format) {
     }
 }
 
-static uint64_t picopass_create_max_card(WiegandFormat format) {
+static uint64_t picopass_create_max_card_number(WiegandFormat format) {
     switch(format) {
     case WiegandFormat_H10301:
         return 0xFFFF;
@@ -88,19 +71,6 @@ static uint64_t picopass_create_clamp(uint64_t value, uint64_t max) {
     return (value > max) ? max : value;
 }
 
-static const char* picopass_create_action_name(uint8_t action) {
-    switch(action) {
-    case CreateActionEmulate:
-        return "Emulate";
-    case CreateActionWrite:
-        return "Write";
-    case CreateActionSave:
-        return "Save";
-    default:
-        return "Unknown";
-    }
-}
-
 static const char* picopass_create_cred_type_name(uint8_t type) {
     switch(type) {
     case CreateCredTypeIclassLegacyStandard:
@@ -108,19 +78,6 @@ static const char* picopass_create_cred_type_name(uint8_t type) {
     default:
         return "Unknown";
     }
-}
-
-static void picopass_create_set_default_save_name(Picopass* picopass) {
-    const char* format_name = picopass_wiegand_format_name(create_state.format);
-    char filename[64];
-    snprintf(
-        filename,
-        sizeof(filename),
-        "%s_FC%lu_CN%llu",
-        format_name ? format_name : "wiegand",
-        (unsigned long)create_state.facility_code,
-        (unsigned long long)create_state.card_number);
-    picopass_device_set_name(picopass->dev, filename);
 }
 
 static void picopass_create_apply_cred_type_defaults(Picopass* picopass) {
@@ -132,23 +89,13 @@ static void picopass_create_apply_cred_type_defaults(Picopass* picopass) {
         pacs->se_enabled = false;
         pacs->sio = false;
         pacs->biometrics = 0;
-        pacs->pin_length = create_state.pin_length;
+        pacs->pin_length = 0;
         pacs->encryption = PicopassDeviceEncryption3DES;
         pacs->elite_kdf = false;
         memcpy(pacs->key, picopass_iclass_key, PICOPASS_BLOCK_LEN);
         memset(pacs->pin0, 0, PICOPASS_BLOCK_LEN);
         memset(pacs->pin1, 0, PICOPASS_BLOCK_LEN);
         break;
-    }
-
-    // Apply user overrides captured via Advanced.
-    pacs->legacy = create_state.legacy;
-    pacs->se_enabled = create_state.se_enabled;
-    pacs->sio = create_state.sio;
-    pacs->biometrics = create_state.biometrics;
-    pacs->pin_length = create_state.pin_length;
-    if(create_state.encryption != 0) {
-        pacs->encryption = create_state.encryption;
     }
 }
 
@@ -165,7 +112,10 @@ static void picopass_create_seed_legacy(PicopassDeviceData* dev_data) {
     static const uint8_t default_pacs_cfg[PICOPASS_BLOCK_LEN] =
         {0x03, 0x03, 0x03, 0x03, 0x00, 0x03, 0xE0, 0x17};
 
-    memcpy(dev_data->card_data[PICOPASS_CSN_BLOCK_INDEX].data, create_state.csn, PICOPASS_BLOCK_LEN);
+    memcpy(
+        dev_data->card_data[PICOPASS_CSN_BLOCK_INDEX].data,
+        picopass_create_default_csn,
+        PICOPASS_BLOCK_LEN);
     dev_data->card_data[PICOPASS_CSN_BLOCK_INDEX].valid = true;
 
     memcpy(
@@ -271,15 +221,19 @@ static void picopass_scene_create_update_menu(Picopass* picopass) {
     submenu_reset(submenu);
 
     char label[32];
-    
-    snprintf(label, sizeof(label), "Cred Type: %s", picopass_create_cred_type_name(create_state.cred_type));
+
+    snprintf(
+        label,
+        sizeof(label),
+        "Cred Type: %s",
+        picopass_create_cred_type_name(create_state.cred_type));
     submenu_add_item(
         submenu,
         label,
         CreateMenuCredentialType,
         picopass_scene_create_submenu_callback,
         picopass);
-    
+
     snprintf(
         label,
         sizeof(label),
@@ -291,7 +245,7 @@ static void picopass_scene_create_update_menu(Picopass* picopass) {
         CreateMenuFormat,
         picopass_scene_create_submenu_callback,
         picopass);
-        
+
     if(create_state.format == WiegandFormat_H10302) {
         snprintf(label, sizeof(label), "Facility Code: (n/a)");
     } else {
@@ -309,22 +263,6 @@ static void picopass_scene_create_update_menu(Picopass* picopass) {
         submenu,
         label,
         CreateMenuCard,
-        picopass_scene_create_submenu_callback,
-        picopass);
-
-    // Advanced menu is temporarily hidden until it is fully tested.
-    // submenu_add_item(
-    //     submenu,
-    //     "Advanced...",
-    //     CreateMenuAdvanced,
-    //     picopass_scene_create_submenu_callback,
-    //     picopass);
-
-    snprintf(label, sizeof(label), "Action: %s", picopass_create_action_name(create_state.action));
-    submenu_add_item(
-        submenu,
-        label,
-        CreateMenuAction,
         picopass_scene_create_submenu_callback,
         picopass);
 
@@ -377,14 +315,14 @@ static void picopass_scene_create_cycle_format(void) {
     create_state.format =
         (create_state.format + 1) >= WiegandFormat_Count ? WiegandFormat_H10301 :
                                                            create_state.format + 1;
-    uint32_t fc_max = picopass_create_max_facility(create_state.format);
+    uint32_t fc_max = picopass_create_max_facility_code(create_state.format);
     if(fc_max == 0) {
         create_state.facility_code = 0;
     } else if(create_state.facility_code > fc_max) {
         create_state.facility_code = fc_max;
     }
 
-    uint64_t cn_max = picopass_create_max_card(create_state.format);
+    uint64_t cn_max = picopass_create_max_card_number(create_state.format);
     if(create_state.card_number > cn_max) {
         create_state.card_number = cn_max;
     }
@@ -398,7 +336,7 @@ static void picopass_scene_create_apply_text(Picopass* picopass) {
     }
 
     if(create_state.pending_field == PicopassCreateFieldFacility) {
-        uint32_t max = picopass_create_max_facility(create_state.format);
+        uint32_t max = picopass_create_max_facility_code(create_state.format);
         if(max > 0) {
             value = picopass_create_clamp(value, max);
         } else {
@@ -406,12 +344,9 @@ static void picopass_scene_create_apply_text(Picopass* picopass) {
         }
         create_state.facility_code = (uint32_t)value;
     } else if(create_state.pending_field == PicopassCreateFieldCard) {
-        uint64_t max = picopass_create_max_card(create_state.format);
+        uint64_t max = picopass_create_max_card_number(create_state.format);
         value = picopass_create_clamp(value, max);
         create_state.card_number = value;
-    } else if(create_state.pending_field == PicopassCreateFieldPinLength) {
-        if(value > 15) value = 15;
-        create_state.pin_length = (uint8_t)value;
     }
 
     create_state.pending_field = PicopassCreateFieldNone;
@@ -420,33 +355,17 @@ static void picopass_scene_create_apply_text(Picopass* picopass) {
 void picopass_scene_create_on_enter(void* context) {
     Picopass* picopass = context;
 
-    // Only initialize user-facing fields once; preserve FC/CN/format/action across returns.
+    picopass->dev->dev_name[0] = '\0';
+    furi_string_reset(picopass->dev->load_path);
+
+    // Only initialize user-facing fields once; preserve FC/CN/format across returns.
     if(!create_state_initialized) {
         create_state.format = WiegandFormat_H10301;
         create_state.facility_code = 0;
         create_state.card_number = 0;
-        create_state.action = CreateActionEmulate;
+        create_state.cred_type = CreateCredTypeIclassLegacyStandard;
         create_state.pending_field = PicopassCreateFieldNone;
-        static const uint8_t default_csn[PICOPASS_BLOCK_LEN] =
-            {0x6D, 0xC2, 0x5B, 0x15, 0xFE, 0xFF, 0x12, 0xE0};
-        memcpy(create_state.csn, default_csn, PICOPASS_BLOCK_LEN);
         create_state_initialized = true;
-    }
-
-    // Always refresh advanced fields from current device data so advanced changes persist.
-    create_state.pin_length = picopass->dev->dev_data.pacs.pin_length;
-    create_state.encryption = picopass->dev->dev_data.pacs.encryption;
-    create_state.legacy = picopass->dev->dev_data.pacs.legacy;
-    create_state.se_enabled = picopass->dev->dev_data.pacs.se_enabled;
-    create_state.sio = picopass->dev->dev_data.pacs.sio;
-    create_state.biometrics = picopass->dev->dev_data.pacs.biometrics;
-    if(picopass->dev->dev_data.card_data[PICOPASS_CSN_BLOCK_INDEX].valid &&
-       !picopass_is_memset(
-           picopass->dev->dev_data.card_data[PICOPASS_CSN_BLOCK_INDEX].data, 0x00, PICOPASS_BLOCK_LEN)) {
-        memcpy(
-            create_state.csn,
-            picopass->dev->dev_data.card_data[PICOPASS_CSN_BLOCK_INDEX].data,
-            PICOPASS_BLOCK_LEN);
     }
 
     picopass_scene_create_update_menu(picopass);
@@ -484,31 +403,12 @@ bool picopass_scene_create_on_event(void* context, SceneManagerEvent event) {
             picopass_create_apply_cred_type_defaults(picopass);
             picopass_scene_create_update_menu(picopass);
             consumed = true;
-        // Advanced scene temporarily disabled while being tested.
-        // } else if(event.event == CreateMenuAdvanced) {
-        //     scene_manager_set_scene_state(
-        //         picopass->scene_manager, PicopassSceneCreate, CreateMenuAdvanced);
-        //     scene_manager_next_scene(picopass->scene_manager, PicopassSceneCreateAdvanced);
-        //     consumed = true;
-        } else if(event.event == CreateMenuAction) {
-            scene_manager_set_scene_state(
-                picopass->scene_manager, PicopassSceneCreate, CreateMenuAction);
-            create_state.action = (create_state.action + 1) % CreateActionCount;
-            picopass_scene_create_update_menu(picopass);
-            consumed = true;
         } else if(event.event == CreateMenuRun) {
             scene_manager_set_scene_state(
                 picopass->scene_manager, PicopassSceneCreate, CreateMenuRun);
             if(picopass_create_build(picopass)) {
-                if(create_state.action == CreateActionEmulate) {
-                    scene_manager_next_scene(picopass->scene_manager, PicopassSceneEmulate);
-                } else if(create_state.action == CreateActionWrite) {
-                    scene_manager_next_scene(picopass->scene_manager, PicopassSceneWriteCard);
-                } else if(create_state.action == CreateActionSave) {
-                    picopass->dev->format = PicopassDeviceSaveFormatOriginal;
-                    picopass_create_set_default_save_name(picopass);
-                    scene_manager_next_scene(picopass->scene_manager, PicopassSceneSaveName);
-                }
+                picopass->dev->format = PicopassDeviceSaveFormatOriginal;
+                scene_manager_next_scene(picopass->scene_manager, PicopassSceneSavedMenu);
             } else {
                 picopass_scene_create_update_menu(picopass);
             }
